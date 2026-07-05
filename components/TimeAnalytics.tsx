@@ -479,7 +479,7 @@ export default function TimeAnalytics({
                   {weekData.barData.map((day, idx) => {
                     const isSelectedDay = day.date === selectedDate;
                     return (
-                      <div key={idx} className="flex-1 flex flex-col items-center group">
+                      <div key={idx} className="relative flex-1 flex flex-col items-center group">
                         {/* Tooltip */}
                         <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 dark:bg-slate-950 text-white text-[9px] font-semibold py-1 px-1.5 rounded-md absolute -translate-y-8 pointer-events-none border border-slate-800">
                           {formatDuration(day.busyMins)}
@@ -487,7 +487,10 @@ export default function TimeAnalytics({
                         
                         {/* Bar */}
                         <button
-                          onClick={() => onSelectDate(day.date)}
+                          onClick={() => {
+                            onSelectDate(day.date);
+                            setActiveTab('day');
+                          }}
                           className={`w-full max-w-[28px] rounded-t-lg transition-all duration-300 relative cursor-pointer ${
                             day.percent === 0
                               ? 'bg-muted/30 border border-border/20 h-1.5'
@@ -570,7 +573,10 @@ export default function TimeAnalytics({
                       {monthData.busiestDays.map((day, idx) => (
                         <div
                           key={idx}
-                          onClick={() => onSelectDate(day.date)}
+                          onClick={() => {
+                            onSelectDate(day.date);
+                            setActiveTab('day');
+                          }}
                           className="flex items-center justify-between p-3.5 bg-muted/20 dark:bg-muted/5 border border-border/50 hover:border-cyan-500/50 rounded-xl transition-all cursor-pointer"
                         >
                           <span className="text-sm font-semibold text-foreground">
