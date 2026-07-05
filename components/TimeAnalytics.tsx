@@ -25,6 +25,7 @@ export default function TimeAnalytics({
   onSelectDate,
 }: TimeAnalyticsProps) {
   const [activeTab, setActiveTab] = useState<'day' | 'week' | 'month'>('day');
+  const [expandedBusiestDay, setExpandedBusiestDay] = useState<string | null>(null);
 
   // Convert "HH:MM" to minutes since midnight
   const timeToMinutes = (t: string): number => {
@@ -72,7 +73,7 @@ export default function TimeAnalytics({
     return merged;
   };
 
-  // Extract raw busy slots for a specific date
+  // Extract raw busy slots for a specific date (clipped to awake hours 7:30 AM to 12 AM / 450 to 1440 minutes)
   const getBusySlotsForDate = (dateStr: string): [number, number][] => {
     const dayTasks = tasks.filter((t) => t.date === dateStr);
     const slots: [number, number][] = [];
@@ -82,8 +83,14 @@ export default function TimeAnalytics({
         const start = timeToMinutes(task.time);
         // If there's an endTime, use it. Otherwise, assume a 60-minute duration.
         const end = task.endTime ? timeToMinutes(task.endTime) : start + 60;
-        // Cap at end of day (1440 mins)
-        slots.push([start, Math.min(end, 1440)]);
+        
+        // Clip to awake window [450, 1440] (exclude sleep time 12 AM to 7:30 AM)
+        const clippedStart = Math.max(start, 450);
+        const clippedEnd = Math.max(Math.min(end, 1440), 450);
+        
+        if (clippedStart < clippedEnd) {
+          slots.push([clippedStart, clippedEnd]);
+        }
       }
     });
 
@@ -101,16 +108,17 @@ export default function TimeAnalytics({
       busyMinutes += end - start;
     });
 
-    const freeMinutes = 1440 - busyMinutes;
+    const totalAwakeMins = 990; // 1440 - 450
+    const freeMinutes = totalAwakeMins - busyMinutes;
 
     // Calculate free time slots
     const freeSlots: [number, number][] = [];
     if (mergedSlots.length === 0) {
-      freeSlots.push([0, 1440]);
+      freeSlots.push([450, 1440]);
     } else {
-      // Check from midnight to first task
-      if (mergedSlots[0][0] > 0) {
-        freeSlots.push([0, mergedSlots[0][0]]);
+      // Check from awake start (7:30 AM / 450) to first task
+      if (mergedSlots[0][0] > 450) {
+        freeSlots.push([450, mergedSlots[0][0]]);
       }
       // Check gaps between tasks
       for (let i = 0; i < mergedSlots.length - 1; i++) {
@@ -120,7 +128,7 @@ export default function TimeAnalytics({
           freeSlots.push([endOfCurrent, startOfNext]);
         }
       }
-      // Check from last task to end of day
+      // Check from last task to end of day (12 AM / 1440)
       const lastSlot = mergedSlots[mergedSlots.length - 1];
       if (lastSlot[1] < 1440) {
         freeSlots.push([lastSlot[1], 1440]);
@@ -134,7 +142,7 @@ export default function TimeAnalytics({
     return {
       busyMinutes,
       freeMinutes,
-      busyPercentage: Math.round((busyMinutes / 1440) * 100),
+      busyPercentage: Math.round((busyMinutes / totalAwakeMins) * 100),
       freeSlots: formattedFreeSlots,
       tasksWithTimes: tasks
         .filter((t) => t.date === dateStr && t.time)
@@ -176,13 +184,13 @@ export default function TimeAnalytics({
       return dayBusy;
     });
 
-    const totalMinutesInWeek = 7 * 1440; // 10,080 mins
+    const totalMinutesInWeek = 7 * 990; // 6,930 mins (excluding sleep time)
     const freeMinutes = totalMinutesInWeek - totalBusyMins;
 
     const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const barData = weekdayNames.map((name, idx) => {
       const busy = dailyMinutes[idx];
-      const percent = Math.min(Math.round((busy / 1440) * 100), 100);
+      const percent = Math.min(Math.round((busy / 990) * 100), 100);
       return {
         name,
         date: weekDates[idx],
@@ -224,7 +232,7 @@ export default function TimeAnalytics({
       }
     }
 
-    const totalMinutesInMonth = daysInMonth * 1440;
+    const totalMinutesInMonth = daysInMonth * 990; // excluding sleep time
     const freeMinutes = totalMinutesInMonth - totalBusyMins;
 
     // Busiest days sorted descending
@@ -570,28 +578,94 @@ export default function TimeAnalytics({
                     </p>
                   ) : (
                     <div className="flex flex-col gap-2.5">
-                      {monthData.busiestDays.map((day, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => {
-                            onSelectDate(day.date);
-                            setActiveTab('day');
-                          }}
-                          className="flex items-center justify-between p-3.5 bg-muted/20 dark:bg-muted/5 border border-border/50 hover:border-cyan-500/50 rounded-xl transition-all cursor-pointer"
-                        >
-                          <span className="text-sm font-semibold text-foreground">
-                            {day.label}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-500/5 dark:bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/10">
-                              {day.duration} busy
-                            </span>
-                            <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
+                      {monthData.busiestDays.map((day, idx) => {
+                        const isExpanded = expandedBusiestDay === day.date;
+                        const dayTasks = tasks
+                          .filter((t) => t.date === day.date && t.time)
+                          .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+                        return (
+                          <div
+                            key={idx}
+                            className="flex flex-col bg-muted/20 dark:bg-muted/5 border border-border/50 rounded-xl overflow-hidden transition-all duration-200"
+                          >
+                            {/* Header / Clickable Toggle */}
+                            <div
+                              onClick={() => setExpandedBusiestDay(isExpanded ? null : day.date)}
+                              className="flex items-center justify-between p-3.5 hover:border-cyan-500/30 cursor-pointer select-none transition-colors"
+                            >
+                              <span className="text-sm font-semibold text-foreground">
+                                {day.label}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-500/5 dark:bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/10">
+                                  {day.duration} busy
+                                </span>
+                                <svg
+                                  className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </div>
+                            </div>
+
+                            {/* Collapsible Details */}
+                            {isExpanded && (
+                              <div className="px-3.5 pb-3.5 pt-1.5 border-t border-border/20 bg-muted/10 dark:bg-muted/5 flex flex-col gap-2.5">
+                                <h5 className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-1">
+                                  Scheduled Tasks ({dayTasks.length})
+                                </h5>
+                                {dayTasks.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic py-1">
+                                    No tasks with times scheduled.
+                                  </p>
+                                ) : (
+                                  <div className="flex flex-col gap-2 max-h-[150px] overflow-y-auto pr-1">
+                                    {dayTasks.map((task) => (
+                                      <div
+                                        key={task.id}
+                                        className="flex items-center justify-between p-2 bg-card border border-border/30 rounded-lg"
+                                      >
+                                        <div className="flex flex-col min-w-0 pr-2">
+                                          <span className="text-xs font-semibold text-foreground truncate">
+                                            {task.title}
+                                          </span>
+                                          <span className="text-[10px] text-muted-foreground mt-0.5 capitalize flex items-center gap-1">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${
+                                              task.priority === 'high' ? 'bg-rose-500' : task.priority === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                                            }`} />
+                                            {task.priority} priority
+                                          </span>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-500/5 dark:bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/10 shrink-0">
+                                          {task.time ? (task.endTime ? `${minutesTo12h(timeToMinutes(task.time))} – ${minutesTo12h(timeToMinutes(task.endTime))}` : minutesTo12h(timeToMinutes(task.time))) : ''}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {/* Link to Daily View */}
+                                <button
+                                  onClick={() => {
+                                    onSelectDate(day.date);
+                                    setActiveTab('day');
+                                  }}
+                                  className="mt-1.5 w-full py-1.5 px-3 text-center text-xs font-bold text-cyan-500 hover:text-cyan-600 dark:text-cyan-400 dark:hover:text-cyan-300 hover:bg-cyan-500/5 border border-cyan-500/20 hover:border-cyan-500/40 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  View day allocation details
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
