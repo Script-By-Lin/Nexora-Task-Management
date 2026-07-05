@@ -8,6 +8,7 @@ interface Task {
   description: string;
   date: string;
   time?: string;
+  endTime?: string;
   priority: 'low' | 'medium' | 'high';
   completed: boolean;
 }

@@ -8,6 +8,7 @@ interface Task {
   description: string;
   date: string;
   time?: string;
+  endTime?: string;
   priority: 'low' | 'medium' | 'high';
   completed: boolean;
   recurrenceGroupId?: string;
@@ -21,6 +22,7 @@ interface TaskFormProps {
     description: string;
     date: string;
     time?: string;
+    endTime?: string;
     priority: 'low' | 'medium' | 'high';
     repeat?: {
       endDate: string;
@@ -42,6 +44,7 @@ export default function TaskForm({
   const [description, setDescription] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
 
   // Recurrence states
@@ -59,6 +62,7 @@ export default function TaskForm({
         setDescription(taskToEdit.description || '');
         setDate(taskToEdit.date);
         setTime(taskToEdit.time || '');
+        setEndTime(taskToEdit.endTime || '');
         setPriority(taskToEdit.priority);
         setIsRecurring(false);
         setEndDate(taskToEdit.date);
@@ -69,6 +73,7 @@ export default function TaskForm({
         const initialDate = defaultDate || new Date().toISOString().split('T')[0];
         setDate(initialDate);
         setTime('');
+        setEndTime('');
         setPriority('medium');
         setIsRecurring(false);
         setEndDate(initialDate);
@@ -111,6 +116,7 @@ export default function TaskForm({
       description: description.trim(),
       date,
       time: time || undefined,
+      endTime: endTime || undefined,
       priority,
       ...(isRecurring && !taskToEdit ? {
         repeat: {
@@ -192,31 +198,55 @@ export default function TaskForm({
             />
           </div>
 
-          {/* Date & Time */}
+          {/* Date */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="task-date" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              Date
+            </label>
+            <input
+              id="task-date"
+              type="date"
+              required
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full px-4 py-2.5 bg-muted/40 dark:bg-muted/10 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-foreground cursor-pointer"
+            />
+          </div>
+
+          {/* Time Range */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="task-date" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Start Date
-              </label>
-              <input
-                id="task-date"
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-4 py-2.5 bg-muted/40 dark:bg-muted/10 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-foreground cursor-pointer"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
               <label htmlFor="task-time" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Time (Optional)
+                Start Time (Optional)
               </label>
               <input
                 id="task-time"
                 type="time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTime(val);
+                  if (!val) {
+                    setEndTime('');
+                  } else if (endTime && endTime < val) {
+                    setEndTime(val);
+                  }
+                }}
                 className="w-full px-4 py-2.5 bg-muted/40 dark:bg-muted/10 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-foreground cursor-pointer"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="task-endTime" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                End Time (Optional)
+              </label>
+              <input
+                id="task-endTime"
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                min={time || undefined}
+                disabled={!time}
+                className="w-full px-4 py-2.5 bg-muted/40 dark:bg-muted/10 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-foreground cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>

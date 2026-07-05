@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Calendar from '@/components/Calendar';
 import TaskList from '@/components/TaskList';
 import TaskForm from '@/components/TaskForm';
+import TimeAnalytics from '@/components/TimeAnalytics';
 
 interface Task {
   id: string;
@@ -12,6 +13,7 @@ interface Task {
   description: string;
   date: string;
   time?: string;
+  endTime?: string;
   priority: 'low' | 'medium' | 'high';
   completed: boolean;
   recurrenceGroupId?: string;
@@ -20,7 +22,7 @@ interface Task {
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState('');
-  const [currentView, setView] = useState<'today' | 'all' | 'calendar'>('today');
+  const [currentView, setView] = useState<'today' | 'all' | 'calendar' | 'analytics'>('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -54,6 +56,14 @@ export default function Home() {
     // 3. Set default selected date
     setSelectedDate(getTodayDateString());
     setHasMounted(true);
+
+    // 4. Register service worker for PWA installability
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(
+        (reg) => console.log('ServiceWorker registration successful with scope: ', reg.scope),
+        (err) => console.error('ServiceWorker registration failed: ', err)
+      );
+    }
   }, []);
 
   // Update theme class on HTML element
@@ -202,7 +212,7 @@ export default function Home() {
   };
 
   // Navigation handlers
-  const handleViewChange = (newView: 'today' | 'all' | 'calendar') => {
+  const handleViewChange = (newView: 'today' | 'all' | 'calendar' | 'analytics') => {
     setView(newView);
     if (newView === 'today') {
       setSelectedDate(getTodayDateString());
@@ -216,7 +226,7 @@ export default function Home() {
     if (currentView === 'today') {
       const todayStr = getTodayDateString();
       viewFiltered = tasks.filter((t) => t.date === todayStr);
-    } else if (currentView === 'calendar') {
+    } else if (currentView === 'calendar' || currentView === 'analytics') {
       viewFiltered = tasks.filter((t) => t.date === selectedDate);
     }
 
@@ -242,7 +252,7 @@ export default function Home() {
     if (currentView === 'today') {
       const todayStr = getTodayDateString();
       statsTasks = tasks.filter((t) => t.date === todayStr);
-    } else if (currentView === 'calendar') {
+    } else if (currentView === 'calendar' || currentView === 'analytics') {
       statsTasks = tasks.filter((t) => t.date === selectedDate);
     }
 
@@ -305,6 +315,13 @@ export default function Home() {
               />
             </div>
           </div>
+        ) : currentView === 'analytics' ? (
+          /* Time Analytics View */
+          <TimeAnalytics
+            tasks={tasks}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+          />
         ) : (
           /* List Views (Today & All Tasks - Centered dashboard container) */
           <div className="max-w-3xl mx-auto bg-card rounded-2xl border border-border p-6 md:p-8 shadow-sm">

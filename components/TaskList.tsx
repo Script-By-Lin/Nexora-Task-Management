@@ -8,6 +8,7 @@ interface Task {
   description: string;
   date: string;
   time?: string;
+  endTime?: string;
   priority: 'low' | 'medium' | 'high';
   completed: boolean;
 }
@@ -70,6 +71,18 @@ export default function TaskList({
     return `${hours12}:${String(minutes).padStart(2, '0')} ${ampm}`;
   };
 
+  // Format start time and end time range
+  const formatTimeRange = (time24?: string, endTime24?: string) => {
+    if (!time24 && !endTime24) return '';
+    if (time24 && endTime24) {
+      return `${formatTime12h(time24)} – ${formatTime12h(endTime24)}`;
+    }
+    if (time24) {
+      return formatTime12h(time24);
+    }
+    return `Until ${formatTime12h(endTime24)}`;
+  };
+
   // Format single task date badge (for 'All Tasks' view)
   const formatTaskDateBadge = (dateStr: string) => {
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -91,7 +104,16 @@ export default function TaskList({
     
     // Sort by time
     if (a.time && b.time) {
-      return a.time.localeCompare(b.time);
+      const timeCompare = a.time.localeCompare(b.time);
+      if (timeCompare !== 0) return timeCompare;
+      
+      // If start times are identical, sort by end time
+      if (a.endTime && b.endTime) {
+        return a.endTime.localeCompare(b.endTime);
+      }
+      if (a.endTime) return -1;
+      if (b.endTime) return 1;
+      return 0;
     }
     if (a.time) return -1;
     if (b.time) return 1;
@@ -222,12 +244,12 @@ export default function TaskList({
                       </span>
 
                       {/* Time Badge */}
-                      {task.time && (
+                      {(task.time || task.endTime) && (
                         <span className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/60 dark:bg-muted/20 px-2 py-0.5 rounded-md border border-border/20">
                           <svg className="w-3.5 h-3.5 text-muted-foreground/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span>{formatTime12h(task.time)}</span>
+                          <span>{formatTimeRange(task.time, task.endTime)}</span>
                         </span>
                       )}
 
